@@ -132,7 +132,7 @@ func _process(_delta: float):
 							go_to_menu(SUBMENU.SFX)
 						3:
 							EventBus.emit_signal("game_paused", false)
-							get_tree().reload_current_scene()  # restart
+							EventBus.emit_signal("restart_level")
 						4:
 							EventBus.emit_signal("game_paused", false)
 							get_tree().change_scene("res://scenes/title/TitleScreen.tscn")
@@ -331,6 +331,7 @@ func volume_select(delta: int, label: RichTextLabel):
 				+ (">" if 10 > Settings.volume_sfx else " ")
 				+ "\n"
 			)
+			$"PauseMenu/SFXMenu/SFX Player".play()
 		4:
 			Settings.volume_voice = int(clamp(Settings.volume_voice + delta, 0, 10))
 			label.text = (
@@ -343,6 +344,7 @@ func volume_select(delta: int, label: RichTextLabel):
 				+ (">" if 10 > Settings.volume_voice else " ")
 				+ "\n"
 			)
+			$"PauseMenu/SFXMenu/Voice Player".play()
 
 	# reapply the wave
 	set_item_style()

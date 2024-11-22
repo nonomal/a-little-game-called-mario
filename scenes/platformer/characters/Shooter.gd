@@ -14,11 +14,12 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	# Remove one coin and spawn a projectile
 	# Continus shooting after 0 coins
-	if event.is_action_pressed("shoot") and CoinInventoryHandle.change_coins_on(player, -1):
-		shoot(default_projectile)
-	#Shoots fireball
-	if event.is_action_pressed("fire") and inventory.has_flower:
-		shoot(fireball_projectile)
+	if event.is_action_pressed("shoot"):
+		if inventory.has_flower:
+			if inventory.flower_amount > 0:
+				shoot(fireball_projectile)
+		elif CoinInventoryHandle.change_coins_on(player, -1):
+			shoot(default_projectile)
 
 
 func shoot(projectile_scene: PackedScene) -> void:
@@ -26,7 +27,7 @@ func shoot(projectile_scene: PackedScene) -> void:
 	# Origin is affected by changes to Sprite (ex: squashing)
 	var projectile = projectile_scene.instance()
 	player.get_parent().add_child(projectile)
-	var shoot_dir := Vector2.LEFT if player.sprite.flip_h else Vector2.RIGHT
+	var shoot_dir := Vector2.RIGHT * player.pivot.scale.x
 	# Changes ShootOrigin based on direction
 	if shoot_dir == Vector2.LEFT:
 		set_position(Vector2(-4, -16))

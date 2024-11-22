@@ -927,6 +927,7 @@ rotation = 1.57079
 report_to_group = "squad1"
 cone_width = 64.0
 cone_color = Color( 1, 0, 0, 1 )
+cone_stops_at_tile = true
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="VisionCone"]
 autoplay = "scroll"
@@ -976,6 +977,7 @@ anims/bounce = SubResource( 22 )
 [node name="EndTrigger" type="Area2D" parent="."]
 position = Vector2( 3912, 480 )
 collision_layer = 0
+collision_mask = 64
 script = ExtResource( 13 )
 dialogue_node = NodePath("../BallMario2/Kino")
 
@@ -985,6 +987,8 @@ shape = SubResource( 16 )
 
 [node name="StartTrigger" type="Area2D" parent="."]
 position = Vector2( 160, 336 )
+collision_layer = 0
+collision_mask = 64
 script = ExtResource( 13 )
 dialogue_node = NodePath("../BallMario/Kino")
 

@@ -5,13 +5,14 @@ const ENDPORTALS_GROUP: String = "EndPortals"
 const COINS_GROUP: String = "Coins"
 const PROJECTILES_GROUP: String = "Projectiles"
 
-onready var hub: TileMap = $TileMap
-onready var level: Node = $TileMap
+export(PackedScene) onready var hub = hub.instance()
+export(PackedScene) var level_scene: PackedScene = null
+export(NodePath) onready var level = get_node(level) as Node
 onready var bgm: AudioStreamPlayer = $Audio/BGM
-onready var ui: CanvasLayer = $UI
+onready var defaultBGMStream: AudioStream = bgm.stream.duplicate()
 
-var completionSound = preload("res://audio/sfx/portal.wav")
-var coinSound = preload("res://audio/sfx/coin.wav")
+onready var inventory: Resource = preload("res://scripts/resources/PlayerInventory.tres")
+onready var reset_inventory: Resource = inventory.duplicate()
 
 var entering_portal: bool = false
 
@@ -19,24 +20,31 @@ var entering_portal: bool = false
 func _ready() -> void:
 	EventBus.connect("build_block", self, "_on_build")
 	EventBus.connect("bgm_changed", self, "_bgm_changed")
-	EventBus.connect("ui_visibility_changed", self, "_on_ui_visibility_changed")
+	EventBus.connect("restart_level", self, "_restart_level")
+	EventBus.connect("level_exited", self, "_finish_level")
+	EventBus.connect("level_changed", self, "_finish_level")
+	Settings.load_data()
+	_replace_level(level_scene.instance() if level_scene else hub)
 	_hook_portals()
 	VisualServer.set_default_clear_color(Color.black)
+	randomize()
 
 
 func _exit_tree() -> void:
 	EventBus.emit_signal("game_exit")
 
 
-func _on_ui_visibility_changed(data):
-	ui.get_child(0).visible = data.visible
-
-
 func _bgm_changed(data) -> void:
-	if "playing" in data:
-		bgm.playing = data.playing
-	if "stream" in data:
-		bgm.stream = data.stream
+	if typeof(data) == TYPE_STRING and data == "reset":
+		bgm.stream = defaultBGMStream
+		bgm.playing = true
+	else:
+		if "stream" in data:
+			bgm.stream = data.stream
+		if "playing" in data:
+			bgm.playing = data.playing
+			if data.playing:
+				bgm.play()
 
 
 func _hook_portals() -> void:
@@ -63,9 +71,7 @@ func _on_build(data) -> void:
 		# to the left or right depending on which direction the player sprite
 		# is facing.
 		var player_tile = level.world_to_map(player.position)
-		var target_tile_x = player_tile[0] + 1
-		if player.sprite.flip_h:
-			target_tile_x = player_tile[0] - 1
+		var target_tile_x = player_tile[0] + (1 if player.pivot.scale.x > 0 else -1)
 		var target_tile_y = player_tile[1]
 		var target_cell_v = level.get_cell(target_tile_x, target_tile_y)
 		if target_cell_v == 0:
@@ -86,31 +92,55 @@ func _on_endportal_body_entered(body: Node2D, next_level: PackedScene, portal: E
 	for despawn in get_tree().get_nodes_in_group(PROJECTILES_GROUP):
 		despawn.queue_free()
 
-	var animation = portal.on_portal_enter(body)
 	body.get_parent().remove_child(body)
 
-	yield(animation, "animation_finished")
+	EventBus.emit_signal("level_completed", {})
+
+	var animation: AnimationPlayer = portal.on_portal_enter(body)
+	if animation == null:
+		yield(get_tree().create_timer(1.0), "timeout")
+	else:
+		yield(animation, "animation_finished")
 	call_deferred("_finish_level", next_level)
 
 
 func _finish_level(next_level: PackedScene = null) -> void:
+	# Set mouse mode as vissible by default, level can change it
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	# Create the new level, insert it into the tree and remove the old one.
 	# If next_level is null, return to the hub
-	var new_level: Node = next_level.instance() if next_level != null else hub
-	add_child_below_node(level, new_level)
-	if level == hub:
-		remove_child(level)
-	else:
-		level.queue_free()
-		yield(level, "tree_exited")
-	level = new_level
-
+	level_scene = next_level
+	var new_level: Node = level_scene.instance() if level_scene != null else hub
+	_replace_level(new_level)
 	# Do not forget to hook the new portals
 	_hook_portals()
-
+	#Update reset state of inventory
+	reset_inventory = inventory.duplicate()
 	#Removing instructions
 	$UI/UI/Instructions.visible = false
-
 	# Reset entering portal state
 	entering_portal = false
-	EventBus.emit_signal("level_started", {})
+	if new_level == hub:
+		EventBus.emit_signal("hub_entered")
+	else:
+		EventBus.emit_signal("level_started", "")
+
+
+func _replace_level(new_level: Node):
+	if new_level != level:
+		add_child_below_node(level, new_level)
+		if level == hub:
+			remove_child(level)
+		else:
+			level.queue_free()
+			yield(level, "tree_exited")
+		level = new_level
+	else:
+		var idx: int = level.get_index() - 1
+		remove_child(level)
+		add_child_below_node(get_child(idx), new_level)
+
+
+func _restart_level() -> void:
+	inventory.reset_to(reset_inventory)
+	_finish_level(level_scene)

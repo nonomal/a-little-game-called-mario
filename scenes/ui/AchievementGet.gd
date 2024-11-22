@@ -1,5 +1,7 @@
 extends RichTextLabel
 
+export(float, 1, 15, 0.05) var show_time_sec: float = 3.25
+
 var coinsSinceStartingLevel := 0
 var totalShots := 0
 var currentLevel := 0
@@ -37,7 +39,6 @@ func _on_shot():
 
 # Load the achievements from the Achievements folder.
 func get_achievements():
-	print("loading achievements")
 	for file in FileUtils.list_dir("res://achievements/level"):
 		var level := int(file.get_file())
 		achievements[level] = []
@@ -74,17 +75,14 @@ func show_completion_message(achievement: Achievement):
 		+ tr("ACHIEVEMENT UNLOCKED: %s") % tr(achievement.description)
 		+ "[/center][/rainbow]"
 	)
-	clear_text_after_seconds()
+	show_and_clear_text_after_seconds(show_time_sec)
 
 
-func clear_text_after_seconds():
-	var t = Timer.new()
-	t.set_wait_time(3.25)
-	t.set_one_shot(true)
-	self.add_child(t)
-	t.start()
-	yield(t, "timeout")
+func show_and_clear_text_after_seconds(time_sec):
+	self.show()
+	yield(get_tree().create_timer(time_sec), "timeout")
 	self.clear()
+	self.hide()
 
 
 func _on_level_completed(_data):

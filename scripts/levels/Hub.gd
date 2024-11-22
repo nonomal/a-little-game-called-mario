@@ -1,8 +1,11 @@
 #warning-ignore-all: NARROWING_CONVERSION
+#warning-ignore-all: INTEGER_DIVISION
 extends TileMap
 
 
 const LABEL_POSITION := Vector2(6, 6)
+const TUTORIAL_NAME = "TUTORIAL"
+const FileUtils = preload("res://scripts/FileUtils.gd")
 
 export(String, DIR) var levels_directory: String
 export(PackedScene) var portal_scene: PackedScene
@@ -19,21 +22,44 @@ func _ready() -> void:
 	var portal_position: Vector2 = portal_template.get_node("Portal").position
 	var label_position: Vector2 = portal_template.get_node("Label").position
 
-	var levels: Array = _get_all_first_levels_in_dir(levels_directory)
-	for i in range(len(levels)):
+	var levels: Dictionary = { }
+	for level in FileUtils.get_all_first_levels_in_dir(levels_directory):
+		var level_name = FileUtils.get_dir_name(level).to_upper()
+		if level_name == TUTORIAL_NAME:
+			continue
+		levels[level_name] = level
+
+	var n_levels: int = len(levels)
+	var keys: Array = levels.keys()
+	keys.sort()
+
+	for i in range(n_levels):
 		var rect: Rect2 = walls_tilemap.get_used_rect()
 		var base_dest: Vector2 = Vector2(
-			rect.position.x + (rect.size.x if i % 2 else -portal_rect.size.x),
+			rect.position.x + (rect.size.x if i >= n_levels / 2 else -portal_rect.size.x),
 			rect.position.y + rect.size.y - 1.0
 		)
 		for y in range(portal_rect.size.y):
 			for x in range(portal_rect.size.x):
 				var dest_x := base_dest.x + x
 				var dest_y := base_dest.y - y
-				var tile := portal_template.get_cell(portal_rect.position.x + x, portal_rect.position.y + portal_rect.size.y - 1 - y)
+				var tile := portal_template.get_cell(
+					portal_rect.position.x + x,
+					portal_rect.position.y + portal_rect.size.y - 1 - y
+				)
 				walls_tilemap.set_cell(dest_x, dest_y, tile)
-		create_portal(levels[i], map_to_world(base_dest) + portal_position)
-		create_label(levels[i], map_to_world(base_dest) + label_position)
+		create_portal(levels[keys[i]], map_to_world(base_dest) + portal_position)
+		create_label(keys[i], map_to_world(base_dest) + label_position)
+
+	# Update left/right labels
+	$LeftLabel.bbcode_text = TextUtils.wave("< %s-%s" % [
+		keys[(n_levels / 2) - 1].substr(0, 1), 
+		keys[0].substr(0, 1)
+	])
+	$RightLabel.bbcode_text = TextUtils.right(TextUtils.wave("%s-%s >" % [
+		keys[n_levels / 2].substr(0, 1),
+		keys[n_levels - 1].substr(0, 1)
+	]))
 
 	# Fill everything with background tile.
 	# And put walls around the room.
@@ -67,11 +93,11 @@ func create_portal(level: String, position: Vector2) -> EndPortal:
 	return portal
 
 
-func create_label(level: String, position: Vector2) -> Label:
+func create_label(text: String, position: Vector2) -> Label:
 	var label: Label = Label.new()
 	label.add_font_override("font", preload("res://scenes/ui/Themes/Default/DefaultFont.tres"))
 	label.uppercase = true
-	label.text = _get_dir_name(level)
+	label.text = text
 	label.set_global_position(position + Vector2(0.0, cell_size.y / 4.0))
 	add_child(label)
 	label.set_global_position(label.rect_global_position - Vector2(label.rect_size.x / 2.0, 0.0))
@@ -95,48 +121,3 @@ func _unset_camera_limits() -> void:
 		camera.limit_bottom = 10000000
 		camera.limit_left = -10000000
 		camera.limit_right = 10000000
-
-
-func _get_dir_name(levelPath: String) -> String:
-	var regex = RegEx.new()
-	regex.compile(".*\/(.*)\/[^\/]+.tscn")
-	return regex.search(levelPath).get_string(1)
-
-
-static func _get_all_first_levels_in_dir(path: String) -> Array:
-	var levels := []
-	var dir := Directory.new()
-	if dir.open(path) == OK:
-		dir.list_dir_begin()
-		var filename := dir.get_next()
-		while filename != "":
-			if filename != "." and filename != ".." and dir.current_is_dir():
-				var level := _get_first_level_in_dir("%s/%s" % [path, filename])
-				if len(level) > 0:
-					levels.append(level)
-			filename = dir.get_next()
-		dir.list_dir_end()
-
-	levels.sort()
-	return levels
-
-
-static func _get_first_level_in_dir(path: String) -> String:
-	var dir := Directory.new()
-	var levels := []
-	if dir.open(path) == OK:
-		dir.list_dir_begin()
-		var filename := dir.get_next()
-		while filename != "":
-			if filename != "." and filename != ".." and !dir.current_is_dir() and filename.ends_with(".tscn"):
-
-				levels.append("%s/%s" % [path, filename])
-			filename = dir.get_next()
-		dir.list_dir_end()
-	# note[apple]: Directory order is not the same on all platforms. On Linux, for some reason,
-	# not sorting the list means that the last level gets returned first
-	if len(levels) > 0:
-		levels.sort()
-		return levels[0]
-	else:
-		return ""
